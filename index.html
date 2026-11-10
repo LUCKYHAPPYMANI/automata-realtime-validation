@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time DFA Validator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .state-chip { transition: all 0.3s ease; }
+        .accept { background-color: #10b981; color: white; }
+        .reject { background-color: #ef4444; color: white; }
+        .neutral { background-color: #3b82f6; color: white; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen p-8">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+        <h1 class="text-3xl font-bold mb-2 border-b pb-4 text-slate-900">Finite Automata Real-Time Validation</h1>
+        <p class="text-slate-600 mb-8">Interactive Deterministic Finite Automaton (DFA) state trace simulator.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div>
+                <label class="block text-sm font-semibold mb-2">Select Application Model</label>
+                <select id="dfa-selector" class="w-full p-3 border rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="pin">1. ATM PIN Validator ([1-9][0-9]{3})</option>
+                    <option value="email">2. Email Format Validator (local@domain.tld)</option>
+                    <option value="password">3. Password Policy (Uppercase + Digit)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">Input Test String</label>
+                <div class="flex gap-2">
+                    <input type="text" id="input-string" placeholder="Enter string to test..." class="w-full p-3 border rounded-lg bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono">
+                    <button onclick="runAutomaton()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">Test</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="results-container" class="hidden">
+            <h2 class="text-xl font-bold mb-4">Execution Trace</h2>
+            <div class="bg-slate-900 rounded-lg p-6 font-mono text-sm overflow-x-auto">
+                <div class="flex items-center gap-2 text-slate-400 mb-4">
+                    <span>Input:</span>
+                    <span id="display-input" class="text-white font-bold text-lg"></span>
+                </div>
+                
+                <div id="trace-path" class="flex flex-wrap items-center gap-2 mb-6 text-white">
+                    <!-- Trace chips injected here -->
+                </div>
+
+                <div class="border-t border-slate-700 pt-4 flex items-center justify-between">
+                    <span class="text-slate-400">Final Verdict:</span>
+                    <span id="final-verdict" class="px-4 py-2 rounded-lg font-bold text-lg"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DFA Transition Logic (Ported from Python)
+        const DFAs = {
+            pin: {
+                start: 'q0',
+                accept: ['q4'],
+                delta: (state, ch) => {
+                    if (state === 'q0') return '123456789'.includes(ch) ? 'q1' : 'q_dead';
+                    if (['q1', 'q2', 'q3'].includes(state)) {
+                        const next = { 'q1': 'q2', 'q2': 'q3', 'q3': 'q4' };
+                        return /[0-9]/.test(ch) ? next[state] : 'q_dead';
+                    }
+                    return 'q_dead';
+                }
+            },
+            email: {
+                start: 'q0',
+                accept: ['q5'],
+                delta: (state, ch) => {
+                    const isAlnum = /^[a-z0-9]+$/i.test(ch);
+                    if (state === 'q0') return isAlnum ? 'q1' : 'q_dead';
+                    if (state === 'q1') return isAlnum ? 'q1' : ch === '.' ? 'q2' : ch === '@' ? 'q3' : 'q_dead';
+                    if (state === 'q2') return isAlnum ? 'q1' : 'q_dead';
+                    if (state === 'q3') return isAlnum ? 'q3_dom' : 'q_dead';
+                    if (state === 'q3_dom') return isAlnum ? 'q3_dom' : ch === '.' ? 'q4' : 'q_dead';
+                    if (state === 'q4') return isAlnum ? 'q5' : 'q_dead';
+                    if (state === 'q5') return isAlnum ? 'q5' : ch === '.' ? 'q4' : 'q_dead';
+                    return 'q_dead';
+                }
+            },
+            password: {
+                start: 'q00',
+                accept: ['q11'],
+                delta: (state, ch) => {
+                    if (state === 'q_dead' || !/^[a-z0-9]+$/i.test(ch)) return 'q_dead';
+                    const hasU = ['q10', 'q11'].includes(state) || /^[A-Z]$/.test(ch);
+                    const hasD = ['q01', 'q11'].includes(state) || /^[0-9]$/.test(ch);
+                    return `q${hasU ? 1 : 0}${hasD ? 1 : 0}`;
+                }
+            }
+        };
+
+        function runAutomaton() {
+            const type = document.getElementById('dfa-selector').value;
+            const input = document.getElementById('input-string').value;
+            const dfa = DFAs[type];
+            
+            let state = dfa.start;
+            const trace = [{ state, char: null }];
+            
+            for (let ch of input) {
+                state = dfa.delta(state, ch);
+                trace.push({ state, char: ch });
+            }
+            
+            const isAccepted = dfa.accept.includes(state);
+            renderTrace(input, trace, isAccepted);
+        }
+
+        function renderTrace(input, trace, isAccepted) {
+            document.getElementById('results-container').classList.remove('hidden');
+            document.getElementById('display-input').textContent = input === '' ? '<empty string>' : input;
+            
+            const traceContainer = document.getElementById('trace-path');
+            traceContainer.innerHTML = '';
+            
+            trace.forEach((step, idx) => {
+                // Draw arrow with character
+                if (idx > 0) {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'flex flex-col items-center text-slate-500 mx-1';
+                    arrow.innerHTML = `<span class="text-xs text-yellow-400 mb-1 font-bold">'${step.char}'</span><span>→</span>`;
+                    traceContainer.appendChild(arrow);
+                }
+                
+                // Draw state chip
+                const chip = document.createElement('div');
+                chip.className = `px-3 py-1 rounded state-chip ${step.state === 'q_dead' ? 'reject' : 'neutral'}`;
+                chip.textContent = step.state;
+                traceContainer.appendChild(chip);
+            });
+
+            const verdict = document.getElementById('final-verdict');
+            if (isAccepted) {
+                verdict.textContent = 'ACCEPT';
+                verdict.className = 'px-4 py-2 rounded-lg font-bold text-lg bg-green-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]';
+            } else {
+                verdict.textContent = 'REJECT';
+                verdict.className = 'px-4 py-2 rounded-lg font-bold text-lg bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]';
+            }
+        }
+        
+        // Handle Enter key
+        document.getElementById('input-string').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') runAutomaton();
+        });
+    </script>
+</body>
+</html>
