@@ -1,10 +1,9 @@
-# automata-realtime-validation
 # Designing Automata for Real-Time Applications
 
 **Author:** S G S V GANESH  
 **University:** SRM Institute of Science and Technology  
 
-This repository features formal DFA designs for real-time validation (ATM PINs, email syntax, and password policies). It includes executable Python scripts, automated unit tests, a GitHub Actions CI pipeline, and an interactive web simulator deployable on GitHub Pages.
+This repository features formal DFA designs for real-time validation (ATM PINs, email syntax, and password policies). It includes executable Python scripts, automated unit tests, and a GitHub Actions CI pipeline.
 
 ---
 
@@ -47,7 +46,6 @@ This repository features formal DFA designs for real-time validation (ATM PINs, 
 
 * `dfa_validator.py` - Core Python execution engine and terminal demonstration.
 * `test_dfa.py` - Automated `unittest` suite validating acceptance criteria.
-* `index.html` - Interactive web-based state tracer (HTML/JS/Tailwind).
 * `.github/workflows/ci.yml` - Continuous Integration pipeline.
 
 ## 6. How to Run Locally
